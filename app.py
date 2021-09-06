@@ -280,10 +280,6 @@ def get_userRoles(username):
     return jsonify(result)
 
 
-# @app.route('/', methods=['GET'])
-# def get():
-#     return jsonify({'msg': 'google hello'})
-
 #Run Server
 if __name__ == '__main__':
     app.run(debug=True)
