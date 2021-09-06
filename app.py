@@ -5,6 +5,7 @@ from flask_marshmallow import Marshmallow
 import jwt
 import datetime
 import os
+from zeep import Client
 
 
 #initial app
@@ -62,10 +63,20 @@ tickets_schema  = TicketSchema(many = True)
 
 @app.route('/login', methods=['POST'])
 def login():
-    token = jwt.encode({'user': 'username', 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=30) }, app.config['SECRET_KEY'], algorithm="HS256")
-    tokenDecode = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
-    
-    return jsonify({'token': token, 'tokenDecode': tokenDecode})
+
+    client= Client("http://172.22.1.26/orgstructure/usersservice.asmx?wsdl").service.AuthinticationStatus(request.json['username'], request.json['password'])
+    if client == True:
+        
+        getAllRoles = User_roles.query.filter_by(username = request.json['username']).all()
+        result = usersRoles_schema.dump(getAllRoles)
+        
+        token = jwt.encode({'user': request.json['username'], 'roles': result, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=300) }, app.config['SECRET_KEY'], algorithm="HS256")
+        tokenDecode = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        
+        return jsonify({'token': token, 'tokenDecode': tokenDecode})
+    return jsonify({'status' : False})
+ 
+   
 
 #create ticket
 @app.route('/ticket', methods=['POST'])
@@ -159,13 +170,12 @@ def update_ticket(id):
 
     return ticket_schema.jsonify(ticket)
 
-
-######################## User Section start #############################
+########################## User Section start #############################
 
 # Users Model
 class Users(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100))
+    username = db.Column(db.String(100), unique=True, nullable=False)
 
     def __init__(self, username):
         self.username = username
@@ -210,7 +220,6 @@ def delete_user(id):
 
 ###############################################################
 
-
 #users roles
 ######################## User Roles Section start #############################
 
@@ -234,11 +243,11 @@ class User_roles(db.Model):
 class User_rolesSchema(ma.Schema):
     class Meta:
         fields = ('id', 'username', 'role')
+        
 
 #init User schema
 userRoles_schema   = User_rolesSchema()
 usersRoles_schema  = User_rolesSchema(many = True)
-
 
 #Create and update users Roles
 @app.route('/user-roles', methods=['POST'])
