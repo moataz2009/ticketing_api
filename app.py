@@ -5,12 +5,16 @@ from flask_marshmallow import Marshmallow
 import jwt
 import datetime
 import os
-from zeep import Client
-
+#from zeep import Client
+from flask_cors import CORS
+import base64
+import string
+import random
 
 #initial app
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
+CORS(app, support_credentials=True)
 
 #database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'db.sqlite')
@@ -29,6 +33,7 @@ class Ticket(db.Model):
     type = db.Column(db.String(100))
     sub_type = db.Column(db.String(100))
     description = db.Column(db.Text)
+    attachment = db.Column(db.Text)
     gender = db.Column(db.String(10))
     from_time = db.Column(db.String(100))
     to_time =  db.Column(db.String(100))
@@ -38,10 +43,12 @@ class Ticket(db.Model):
     created_by = db.Column(db.String(100))
     status = db.Column(db.String(15))
     reply = db.Column(db.Text)
-    def __init__(self, type, sub_type, description, gender, from_time, to_time, ticket_date, priority, created_at, created_by, status, reply):
+
+    def __init__(self, type, sub_type, description, attachment, gender, from_time, to_time, ticket_date, priority, created_at, created_by, status, reply):
         self.type = type
         self.sub_type = sub_type
         self.description = description
+        self.attachment = attachment
         self.gender = gender
         self.from_time = from_time
         self.to_time = to_time
@@ -55,7 +62,7 @@ class Ticket(db.Model):
 #ticket schema
 class TicketSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'type', 'sub_type', 'description', 'gender', 'from_time', 'to_time', 'ticket_date', 'priority', 'created_at', 'created_by', 'status', 'reply')
+        fields = ('id', 'type', 'sub_type', 'description', 'attachment', 'gender', 'from_time', 'to_time', 'ticket_date', 'priority', 'created_at', 'created_by', 'status', 'reply')
 
 #init schema 
 ticket_schema   = TicketSchema()
@@ -63,8 +70,9 @@ tickets_schema  = TicketSchema(many = True)
 
 @app.route('/login', methods=['POST'])
 def login():
-
-    client= Client("http://172.22.1.26/orgstructure/usersservice.asmx?wsdl").service.AuthinticationStatus(request.json['username'], request.json['password'])
+    
+    client= True
+    #Client("http://172.22.1.26/orgstructure/usersservice.asmx?wsdl").service.AuthinticationStatus(request.json['username'], request.json['password'])
     if client == True:
         
         getAllRoles = User_roles.query.filter_by(username = request.json['username']).all()
@@ -74,7 +82,7 @@ def login():
         tokenDecode = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
         
         return jsonify({'token': token, 'tokenDecode': tokenDecode})
-    return jsonify({'status' : False})
+    return jsonify({'message' : 'The username or password is incorrect'})
  
    
 
@@ -84,6 +92,8 @@ def add_ticket():
     type = request.json['type']
     sub_type = request.json['sub_type']
     description = request.json['description']
+    attachment = request.json['attachment']
+    extension = request.json['extension']
     gender = request.json['gender']
     from_time= request.json['from_time']
     to_time= request.json['to_time']
@@ -91,10 +101,18 @@ def add_ticket():
     priority= request.json['priority']
     created_at = request.json['created_at']
     created_by = request.json['created_by']
-    status = "no"
+    status = "Waiting"
     reply = ""
-
-    new_ticket = Ticket(type, sub_type, description, gender, from_time, to_time, ticket_date, priority, created_at, created_by, status, reply)
+    
+    
+    if(attachment != ''):
+        filename = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(30))
+        attachmentFile = filename + '.' + extension
+        convert_and_save(attachment, str(filename) + '.' + extension)
+    else:
+        attachmentFile = ''
+        
+    new_ticket = Ticket(type, sub_type, description, attachmentFile, gender, from_time, to_time, ticket_date, priority, created_at, created_by, status, reply)
     db.create_all()
     db.session.add(new_ticket)
     db.session.commit()
@@ -170,6 +188,10 @@ def update_ticket(id):
 
     return ticket_schema.jsonify(ticket)
 
+
+def convert_and_save(b64_string, filename):
+    with open("files/" + filename, "wb") as fh:
+        fh.write(base64.decodebytes(b64_string.encode()))
 ########################## User Section start #############################
 
 # Users Model
